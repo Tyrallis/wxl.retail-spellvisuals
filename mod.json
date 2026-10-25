@@ -1,0 +1,15 @@
+{
+  "$schema": "../../sdk/schema/mod.json",
+  "id": "wxl.retail-spellvisuals",
+  "name": "Retail Spell Visuals",
+  "version": "0.1.0",
+  "abi": "0.5",
+  "description": "Plays retail spell visuals as retail does: every event of a cast (precast, cast, impact, aura, channel, area) on the caster, the target or the ground, with retail's delays, offsets, turns, scales and animations, and missiles at retail's speed. Reads WXLRetailSpellVisuals.txt from DBFilesClient, which the Retroport Workbench writes for the spells it makes. Needs wxl.modern-m2 for retail models.",
+  "binaries": {
+    "win-x64": "bin/x64/wxl-retail-spellvisuals.dll"
+  },
+  "requires": [
+    { "service": "wxl.m2", "version": 1 },
+    { "service": "wxl.storage", "version": 1 }
+  ]
+}
