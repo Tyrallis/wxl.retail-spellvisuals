@@ -38,6 +38,7 @@
 #include "wxl/objects.hpp"
 #include "wxl/sdk.hpp"
 #include "wxl/services/gx.h"
+#include "wxl/services/m2.h"
 
 namespace glow
 {
@@ -49,8 +50,9 @@ namespace glow
         constexpr float       kStrength = 0.7f;   // retail's numbers read strong against 3.3.5's lighting
 
         wxl::Service<wxl_gx_api> g_gx(WXL_GX_SERVICE, WXL_GX_SERVICE_VERSION);
+        wxl::Service<wxl_m2_api> g_m2(WXL_M2_SERVICE, WXL_M2_SERVICE_VERSION);
         void (*g_provider)(std::vector<Active>&) = nullptr;
-        uint32_t g_watch = 0;
+        wxl::Subscription g_draws;
 
         struct Slot
         {
@@ -356,15 +358,17 @@ float4 main(float2 vpos : VPOS) : COLOR {
 
         // --- 1. the mask ----------------------------------------------------------------------
 
-        HRESULT DrawAgain(IDirect3DDevice9* device, const wxl_gx_model_draw* draw)
+        HRESULT DrawAgain(IDirect3DDevice9* device, const wxl_model_batch_args* draw)
         {
             return device->DrawIndexedPrimitive(static_cast<D3DPRIMITIVETYPE>(draw->primitive_type), draw->base_vertex,
                                                 draw->min_index, draw->vertex_count, draw->start_index,
                                                 draw->primitive_count);
         }
 
-        void WXL_CALL OnModelDraw(const wxl_gx_model_draw* draw, void*)
+        /// ModelBatchDrawn, subscribed raw: the batch the device just drew.
+        void WXL_CALL OnModelDraw(void*, const void* args)
         {
+            const wxl_model_batch_args* draw = static_cast<const wxl_model_batch_args*>(args);
             if (g_slotCount == 0 || g_broken || !draw || draw->blend_mode >= 2) return;
             uint32_t slot = kSlots;
             for (uint32_t i = 0; i < g_slotCount; ++i)
@@ -561,7 +565,7 @@ float4 main(float2 vpos : VPOS) : COLOR {
                     if (g_slotCount == kSlots) break;
                     if (!a.params || a.strength <= 0.0f) continue;
                     const wxl::Object object = wxl::Object::Resolve(a.unit);
-                    void* const root = object.HasHandle() ? g_gx->object_model(object.Handle()) : nullptr;
+                    void* const root = object.HasHandle() ? g_m2->object_model(object.Handle()) : nullptr;
                     if (!root)
                     {
                         ++g_stats.unresolved;
@@ -590,21 +594,21 @@ float4 main(float2 vpos : VPOS) : COLOR {
 
     bool Init(void (*provider)(std::vector<Active>&))
     {
-        if (!g_gx)
+        if (!g_gx || !g_m2)
         {
-            wxl::Log(WXL_LOG_INFO, kTag, "wxl.gx is not published: body glows are left out");
+            wxl::Log(WXL_LOG_INFO, kTag, "wxl.gx or wxl.m2 is not published: body glows are left out");
             return false;
         }
         g_provider = provider;
-        if (g_gx->watch_model_draws(&OnModelDraw, nullptr, &g_watch) != WXL_OK) return false;
+        g_draws = wxl::Subscribe(WXL_EV_ModelBatchDrawn, &OnModelDraw, nullptr);
+        if (!g_draws) return false;
         wxl::ScriptMgr::Add(&g_render);
         return true;
     }
 
     void Shutdown()
     {
-        if (g_gx && g_watch) g_gx->unwatch_model_draws(g_watch);
-        g_watch = 0;
+        g_draws = wxl::Subscription();
         g_slotCount = 0;
         ReleaseAll();
     }
