@@ -1127,7 +1127,7 @@ namespace
     class Casts final : public wxl::ObjectScript
     {
     public:
-        void OnSpellCastStart(const wxl_spell_cast_args& args) override
+        void OnCastStart(const wxl_spell_cast_args& args)
         {
             const SpellDef* def = Def(args.spell_id);
             if (!def || !args.caster_guid) return;
@@ -1138,7 +1138,7 @@ namespace
             Fire(cast, PrecastStart);
         }
 
-        void OnSpellCastGo(const wxl_spell_cast_args& args) override
+        void OnCastGo(const wxl_spell_cast_args& args)
         {
             const SpellDef* def = Def(args.spell_id);
             if (!def || !args.caster_guid) return;
@@ -1161,40 +1161,49 @@ namespace
             EndAll(cast->serial, true);
         }
 
-        void OnSpellCastFailed(const wxl_spell_fail_args& args) override { Failed(args.caster_guid, args.spell_id); }
-        void OnSpellCastInterrupted(const wxl_spell_fail_args& args) override { Failed(args.caster_guid, args.spell_id); }
-        void OnSpellCastCancel(const wxl_spell_cancel_args& args) override { Failed(args.caster_guid, args.spell_id); }
-
-        void OnSpellChannelStart(const wxl_spell_progress_args& args) override
+        void OnSpellCastFailed(wxl::Object, wxl_guid caster, uint32_t spell, uint32_t, uint32_t, int32_t, int32_t) override
         {
-            const SpellDef* def = Def(args.spell_id);
-            if (!def || !args.caster_guid) return;
+            Failed(caster, spell);
+        }
+        void OnSpellCastInterrupted(wxl::Object, wxl_guid caster, uint32_t spell, uint32_t, uint32_t, int32_t, int32_t) override
+        {
+            Failed(caster, spell);
+        }
+        void OnSpellCastCancel(wxl::Object, wxl_guid caster, uint32_t spell, uint32_t, uint32_t, bool) override
+        {
+            Failed(caster, spell);
+        }
+
+        void OnSpellChannelStart(wxl::Object, wxl_guid caster_guid, wxl::Object, wxl_guid, uint32_t spell_id, uint32_t, uint32_t) override
+        {
+            const SpellDef* def = Def(spell_id);
+            if (!def || !caster_guid) return;
             Cast* cast = nullptr;
             for (auto& [serial, c] : g_casts)
-                if (c.caster == args.caster_guid && c.def == def && (!cast || c.born > cast->born)) cast = &c;
-            if (!cast) cast = &NewCast(def, args.caster_guid);
-            g_auraOf[{args.caster_guid, ~args.spell_id}] = cast->serial;
+                if (c.caster == caster_guid && c.def == def && (!cast || c.born > cast->born)) cast = &c;
+            if (!cast) cast = &NewCast(def, caster_guid);
+            g_auraOf[{caster_guid, ~spell_id}] = cast->serial;
             Fire(*cast, ChannelStart);
         }
 
-        void OnSpellChannelStop(const wxl_spell_progress_args& args) override
+        void OnSpellChannelStop(wxl::Object, wxl_guid caster_guid, wxl::Object, wxl_guid, uint32_t spell_id, uint32_t, uint32_t) override
         {
-            auto it = g_auraOf.find({args.caster_guid, ~args.spell_id});
+            auto it = g_auraOf.find({caster_guid, ~spell_id});
             if (it == g_auraOf.end()) return;
             auto c = g_casts.find(it->second);
             g_auraOf.erase(it);
             if (c != g_casts.end()) Fire(c->second, ChannelEnd);
         }
 
-        void OnUnitAuraChanged(const wxl_unit_aura_args& args) override
+        void OnUnitAuraChanged(wxl::Object unit, uint32_t spell_id, bool removed) override
         {
-            const SpellDef* def = Def(args.spell_id);
+            const SpellDef* def = Def(spell_id);
             if (!def || (!def->Has(AuraStart) && !def->Has(AuraEnd))) return;
-            const wxl::Expected<wxl_guid> guid = wxl::Object(args.unit).Guid();
+            const wxl::Expected<wxl_guid> guid = unit.Guid();
             if (!guid || !*guid) return;
-            const AuraKey key{*guid, args.spell_id};
+            const AuraKey key{*guid, spell_id};
             auto it = g_auraOf.find(key);
-            if (args.removed)
+            if (removed)
             {
                 if (it == g_auraOf.end()) return;
                 auto c = g_casts.find(it->second);
@@ -1216,10 +1225,10 @@ namespace
             Fire(cast, AuraStart);
         }
 
-        void OnObjectCreate(const wxl_object_args& args) override
+        void OnObjectCreate(wxl::Object object, wxl_guid guid, wxl_object_type type) override
         {
-            if (args.type != WXL_OBJECT_DYNAMIC) return;
-            const wxl::DynamicObject area(args.object);
+            if (type != WXL_OBJECT_DYNAMIC) return;
+            const wxl::DynamicObject area(object);
             const wxl::Expected<uint32_t> spell = area.SpellId();
             if (!spell) return;
             const SpellDef* def = Def(*spell);
@@ -1234,7 +1243,7 @@ namespace
                 cast.hasDest = true;
                 cast.dest    = ToVec(*at);
             }
-            g_auraOf[{args.guid, *spell}] = cast.serial;
+            g_auraOf[{guid, *spell}] = cast.serial;
             Fire(cast, AreaStart);
             // A ground aura's events (7 on the ground) start with the area too.
             for (const EventDef& e : def->events)
@@ -1245,12 +1254,12 @@ namespace
                 }
         }
 
-        void OnObjectDestroy(const wxl_object_args& args) override
+        void OnObjectDestroy(wxl::Object, wxl_guid guid, wxl_object_type type) override
         {
-            if (args.type != WXL_OBJECT_DYNAMIC) return;
+            if (type != WXL_OBJECT_DYNAMIC) return;
             for (auto it = g_auraOf.begin(); it != g_auraOf.end(); ++it)
             {
-                if (it->first.guid != args.guid) continue;
+                if (it->first.guid != guid) continue;
                 auto c = g_casts.find(it->second);
                 g_auraOf.erase(it);
                 if (c != g_casts.end())
@@ -1266,16 +1275,30 @@ namespace
     class World final : public wxl::WorldScript
     {
     public:
-        void OnUpdate(const wxl_update_args&) override { Tick(); }
-        void OnWorldEnter(const wxl_world_args&) override
+        void OnUpdate(float) override { Tick(); }
+        void OnWorldEnter(uint32_t, wxl_vec3) override
         {
             if (!g_tableRead) ReadTable();
         }
-        void OnWorldLeave(const wxl_world_args&) override { Clear(); }
+        void OnWorldLeave(uint32_t, wxl_vec3) override { Clear(); }
     };
 
     Casts g_castScript;
     World g_worldScript;
+
+    // Cast start and go read the whole struct (ReadCastTargets): raw subscriptions hand it over as
+    // it was raised, where an override would take its 21 members one by one.
+    wxl::Subscription g_castStart, g_castGo;
+
+    void WXL_CALL OnCastStartRaw(void* user, const void* args)
+    {
+        static_cast<Casts*>(user)->OnCastStart(*static_cast<const wxl_spell_cast_args*>(args));
+    }
+
+    void WXL_CALL OnCastGoRaw(void* user, const void* args)
+    {
+        static_cast<Casts*>(user)->OnCastGo(*static_cast<const wxl_spell_cast_args*>(args));
+    }
 
     class RetailSpellVisualsMod final : public wxl::Mod
     {
@@ -1292,6 +1315,8 @@ namespace
             glow::Init(&GlowsNow);
             wxl::ScriptMgr::Add(&g_castScript);
             wxl::ScriptMgr::Add(&g_worldScript);
+            g_castStart = wxl::Subscribe(WXL_EV_SpellCastStart, &OnCastStartRaw, &g_castScript);
+            g_castGo    = wxl::Subscribe(WXL_EV_SpellCastGo, &OnCastGoRaw, &g_castScript);
             wxl::Log(WXL_LOG_INFO, kTag, "playing retail spell visuals from DBFilesClient\\WXLRetailSpellVisuals.txt");
             return WXL_OK;
         }
@@ -1307,10 +1332,12 @@ namespace
 
         void OnUnload() override
         {
+            g_castStart = wxl::Subscription();
+            g_castGo    = wxl::Subscription();
             glow::Shutdown();
             Clear();
         }
     };
 }
 
-WXL_MOD(RetailSpellVisualsMod, "wxl.retail-spellvisuals", "Retail spell visuals", 1)
+WXL_MOD(RetailSpellVisualsMod, "wxl.retail-spellvisuals", "Retail spell visuals")

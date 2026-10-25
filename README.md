@@ -56,6 +56,10 @@ it was.
 
 ## Needs
 
+Since 0.2.0 the mod needs WarcraftXL ABI 0.1.15 (the `x64-port` branches below, as of their rebase on WarcraftXL main);
+older clients refuse it. Build it with Visual Studio 2022: the 2026 Insiders compiler (MSVC 14.50) crashes on the SDK's
+headers.
+
 - The 64-bit WarcraftXL client, built from the `x64-port` branches of
   [client](https://github.com/Tyrallis/client/tree/x64-port), [core](https://github.com/Tyrallis/core/tree/x64-port)
   and [sdk](https://github.com/Tyrallis/sdk/tree/x64-port): `wxl.m2` world calls (`create_world_model`, `place_model`, `set_model_transform`, `play_animation`,

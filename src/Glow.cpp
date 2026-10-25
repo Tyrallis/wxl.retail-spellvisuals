@@ -545,7 +545,7 @@ float4 main(float2 vpos : VPOS) : COLOR {
         class Render final : public wxl::RenderScript
         {
         public:
-            void OnWorldRenderBegin(const wxl_frame_args&) override
+            void OnWorldRenderBegin(uint64_t, float) override
             {
                 g_maskCleared = false;
                 g_maskDrawn   = false;
@@ -575,14 +575,14 @@ float4 main(float2 vpos : VPOS) : COLOR {
                 g_stats.slots += g_slotCount;
             }
 
-            void OnWorldRenderEnd(const wxl_frame_args&) override
+            void OnWorldRenderEnd(uint64_t, float) override
             {
                 if (g_maskDrawn && g_slotCount) Paint();
                 g_slotCount = 0;
                 FlushStats();
             }
 
-            void OnSwapchainLost(const wxl_swapchain_args&) override { ReleaseTargets(); }
+            void OnSwapchainLost(uint32_t, uint32_t) override { ReleaseTargets(); }
         };
 
         Render g_render;
