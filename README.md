@@ -56,9 +56,8 @@ it was.
 
 ## Needs
 
-Since 0.3.0 the mod needs WarcraftXL ABI 0.1.21: the `x64-port` branches below, until WarcraftXL takes their world models
-(the `x64-extras` pull requests);
-older clients refuse it. Build it with Visual Studio 2022: the 2026 Insiders compiler (MSVC 14.50) crashes on the SDK's
+Since 0.3.0 the mod needs WarcraftXL ABI 0.1.21 (WarcraftXL main, or the `x64-port` branches below); older clients
+refuse it. Build it with Visual Studio 2022: the 2026 Insiders compiler (MSVC 14.50) crashes on the SDK's
 headers. The body glows read drawn batches from the `ModelBatchDrawn` event.
 
 - The 64-bit WarcraftXL client, built from the `x64-port` branches of
